@@ -1,0 +1,14 @@
+{
+  "trace_id": "fake-compare-001",
+  "task": "Compare serverless computing and cloud computing.",
+  "source": "hand-written (no real LLM yet)",
+  "steps": [
+    {"type": "llm",  "latency_s": 1.2, "note": "agent decides to read the serverless page"},
+    {"type": "tool", "tool": "web-fetch", "args": {"url": "https://en.wikipedia.org/wiki/Serverless_computing", "max_length": 5000}},
+    {"type": "llm",  "latency_s": 0.9, "note": "agent decides it needs the cloud page too"},
+    {"type": "tool", "tool": "web-fetch", "args": {"url": "https://en.wikipedia.org/wiki/Cloud_computing", "max_length": 5000}},
+    {"type": "llm",  "latency_s": 0.7, "note": "page was truncated, agent asks for the next chunk"},
+    {"type": "tool", "tool": "web-fetch", "args": {"url": "https://en.wikipedia.org/wiki/Cloud_computing", "max_length": 5000, "start_index": 5000}},
+    {"type": "llm",  "latency_s": 2.5, "note": "agent writes the final comparison"}
+  ]
+}
