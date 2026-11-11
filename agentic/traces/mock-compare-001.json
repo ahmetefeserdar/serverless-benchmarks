@@ -1,0 +1,61 @@
+{
+  "version": "0.1",
+  "trace_id": "mock-compare-001",
+  "task": "Compare serverless computing and cloud computing.",
+  "source": {
+    "kind": "synthetic",
+    "model": "mock",
+    "agent": "minimal-loop",
+    "recorded_at": "2026-11-11"
+  },
+  "steps": [
+    {
+      "id": 1,
+      "type": "llm",
+      "latency_s": 0.3,
+      "input_tokens": 500,
+      "output_tokens": 40
+    },
+    {
+      "id": 2,
+      "type": "tool",
+      "tool": "web-fetch",
+      "args": {
+        "url": "https://en.wikipedia.org/wiki/Serverless_computing"
+      },
+      "group": 1
+    },
+    {
+      "id": 3,
+      "type": "tool",
+      "tool": "web-fetch",
+      "args": {
+        "url": "https://en.wikipedia.org/wiki/Cloud_computing"
+      },
+      "group": 1
+    },
+    {
+      "id": 4,
+      "type": "llm",
+      "latency_s": 0.3,
+      "input_tokens": 1000,
+      "output_tokens": 40
+    },
+    {
+      "id": 5,
+      "type": "tool",
+      "tool": "web-fetch",
+      "args": {
+        "url": "https://en.wikipedia.org/wiki/Cloud_computing",
+        "start_index": 5000
+      }
+    },
+    {
+      "id": 6,
+      "type": "llm",
+      "latency_s": 0.3,
+      "input_tokens": 1500,
+      "output_tokens": 40
+    }
+  ]
+}
