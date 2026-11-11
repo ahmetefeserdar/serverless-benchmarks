@@ -1,14 +1,62 @@
 {
+  "version": "0.1",
   "trace_id": "fake-compare-001",
   "task": "Compare serverless computing and cloud computing.",
-  "source": "hand-written (no real LLM yet)",
+  "source": {
+    "kind": "synthetic"
+  },
   "steps": [
-    {"type": "llm",  "latency_s": 1.2, "note": "agent decides to read the serverless page"},
-    {"type": "tool", "tool": "web-fetch", "args": {"url": "https://en.wikipedia.org/wiki/Serverless_computing", "max_length": 5000}},
-    {"type": "llm",  "latency_s": 0.9, "note": "agent decides it needs the cloud page too"},
-    {"type": "tool", "tool": "web-fetch", "args": {"url": "https://en.wikipedia.org/wiki/Cloud_computing", "max_length": 5000}},
-    {"type": "llm",  "latency_s": 0.7, "note": "page was truncated, agent asks for the next chunk"},
-    {"type": "tool", "tool": "web-fetch", "args": {"url": "https://en.wikipedia.org/wiki/Cloud_computing", "max_length": 5000, "start_index": 5000}},
-    {"type": "llm",  "latency_s": 2.5, "note": "agent writes the final comparison"}
+    {
+      "id": 1,
+      "type": "llm",
+      "latency_s": 1.2,
+      "note": "agent decides to read the serverless page"
+    },
+    {
+      "id": 2,
+      "type": "tool",
+      "tool": "web-fetch",
+      "args": {
+        "url": "https://en.wikipedia.org/wiki/Serverless_computing",
+        "max_length": 5000
+      }
+    },
+    {
+      "id": 3,
+      "type": "llm",
+      "latency_s": 0.9,
+      "note": "agent decides it needs the cloud page too"
+    },
+    {
+      "id": 4,
+      "type": "tool",
+      "tool": "web-fetch",
+      "args": {
+        "url": "https://en.wikipedia.org/wiki/Cloud_computing",
+        "max_length": 5000
+      }
+    },
+    {
+      "id": 5,
+      "type": "llm",
+      "latency_s": 0.7,
+      "note": "page was truncated, agent asks for the next chunk"
+    },
+    {
+      "id": 6,
+      "type": "tool",
+      "tool": "web-fetch",
+      "args": {
+        "url": "https://en.wikipedia.org/wiki/Cloud_computing",
+        "max_length": 5000,
+        "start_index": 5000
+      }
+    },
+    {
+      "id": 7,
+      "type": "llm",
+      "latency_s": 2.5,
+      "note": "agent writes the final comparison"
+    }
   ]
 }
