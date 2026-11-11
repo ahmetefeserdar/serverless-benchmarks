@@ -7,6 +7,11 @@ LLM: any OpenAI-compatible chat completions API, configured with
 LLM_BASE_URL, LLM_API_KEY and LLM_MODEL. With --mock, a scripted fake LLM is
 used instead, so the loop can be tested without an API key.
 
+Pages are fetched live while recording (the LLM must see real content), then
+stored as snapshots and the trace is rewritten to reference them, so replays
+are reproducible. Restart the function (`sebs local start`) afterwards so the
+new snapshots get uploaded to storage.
+
 Usage:
   python3 record.py "<task>" <endpoints.json> <out_trace.json> [--mock]
 """
@@ -17,6 +22,9 @@ import os
 import sys
 import time
 import urllib.request
+
+import snapshot
+from replay import load_deployment, make_event
 
 MAX_TURNS = 10
 
@@ -89,19 +97,24 @@ class MockLLM:
                 "usage": {"prompt_tokens": 500 * self.turn, "completion_tokens": 40}}
 
 
-def load_endpoints(path):
-    deployed = json.load(open(path))
-    return {f["benchmark"].split(".", 1)[1]: "http://" + f["url"] for f in deployed["functions"]}
-
-
-def run_tool(endpoints, name, args):
-    out = post_json(endpoints[name], args)
+def run_tool(tools, name, args):
+    url, defaults = tools[name]
+    out = post_json(url, make_event(defaults, args))
     return out["result"]["result"]
+
+
+def freeze_pages(steps):
+    """Snapshot every page fetched live and point the trace at the snapshots."""
+    for step in steps:
+        if step["type"] == "tool" and step["tool"] == "web-fetch" and "url" in step["args"]:
+            args = dict(step["args"])
+            args["page"] = snapshot.save(args.pop("url"))
+            step["args"] = args
 
 
 def record(task, endpoints_path, out_path, mock=False):
     llm = MockLLM() if mock else OpenAICompatibleLLM()
-    endpoints = load_endpoints(endpoints_path)
+    tools = load_deployment(endpoints_path)
     messages = [{"role": "system", "content": SYSTEM_PROMPT}, {"role": "user", "content": task}]
     steps = []
     group = 0
@@ -124,7 +137,7 @@ def record(task, endpoints_path, out_path, mock=False):
         group += 1
         parsed = [(c["id"], c["function"]["name"], json.loads(c["function"]["arguments"])) for c in calls]
         with concurrent.futures.ThreadPoolExecutor() as pool:
-            results = list(pool.map(lambda c: run_tool(endpoints, c[1], c[2]), parsed))
+            results = list(pool.map(lambda c: run_tool(tools, c[1], c[2]), parsed))
         for (call_id, name, args), result in zip(parsed, results):
             step = {"id": len(steps) + 1, "type": "tool", "tool": name, "args": args}
             if len(parsed) > 1:
@@ -132,6 +145,7 @@ def record(task, endpoints_path, out_path, mock=False):
             steps.append(step)
             messages.append({"role": "tool", "tool_call_id": call_id, "content": json.dumps(result)})
 
+    freeze_pages(steps)
     trace = {
         "version": "0.1",
         "trace_id": os.path.splitext(os.path.basename(out_path))[0],

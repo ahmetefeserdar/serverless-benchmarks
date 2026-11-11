@@ -21,7 +21,7 @@
       "type": "tool",
       "tool": "web-fetch",
       "args": {
-        "url": "https://en.wikipedia.org/wiki/Serverless_computing"
+        "page": "Serverless_computing"
       },
       "group": 1
     },
@@ -30,7 +30,7 @@
       "type": "tool",
       "tool": "web-fetch",
       "args": {
-        "url": "https://en.wikipedia.org/wiki/Cloud_computing"
+        "page": "Cloud_computing"
       },
       "group": 1
     },
@@ -46,8 +46,8 @@
       "type": "tool",
       "tool": "web-fetch",
       "args": {
-        "url": "https://en.wikipedia.org/wiki/Cloud_computing",
-        "start_index": 5000
+        "start_index": 5000,
+        "page": "Cloud_computing"
       }
     },
     {

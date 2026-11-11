@@ -3,12 +3,19 @@
 # Web fetch tool of an AI agent, following the reference MCP fetch server
 # (modelcontextprotocol/servers, src/fetch): download a page, extract the
 # main content, convert it to Markdown, and truncate it to the context budget.
+#
+# Pages come from stored snapshots in object storage ("page"), so that runs
+# are reproducible. A live "url" is supported for prototyping only.
 
 import datetime
+import os
 
 import httpx
 import markdownify
 import readabilipy.simple_json
+
+from . import storage
+client = storage.storage.get_instance()
 
 SEBS_USER_AGENT = "SeBS/1.2 (https://github.com/spcl/serverless-benchmarks) SeBS Benchmark Suite/1.2"
 
@@ -21,16 +28,24 @@ def extract_content_from_html(html):
     return markdownify.markdownify(ret['content'], heading_style=markdownify.ATX)
 
 
+def fetch(event):
+    if 'url' in event:
+        response = httpx.get(event['url'], headers={'User-Agent': SEBS_USER_AGENT}, follow_redirects=True, timeout=30)
+        response.raise_for_status()
+        return event['url'], response.content
+    bucket = event['bucket']['bucket']
+    key = os.path.join(event['bucket']['input'], event['page'] + '.html')
+    return event['page'], bytes(client.download_stream(bucket, key))
+
+
 def handler(event):
 
-    url = event.get('url')
     max_length = event.get('max_length', 5000)
     start_index = event.get('start_index', 0)
 
     fetch_begin = datetime.datetime.now()
-    response = httpx.get(url, headers={'User-Agent': SEBS_USER_AGENT}, follow_redirects=True, timeout=30)
-    response.raise_for_status()
-    html = response.text
+    source, raw = fetch(event)
+    html = raw.decode('utf-8', errors='replace')
     fetch_end = datetime.datetime.now()
 
     process_begin = datetime.datetime.now()
@@ -48,12 +63,12 @@ def handler(event):
     process_time = (process_end - process_begin) / datetime.timedelta(microseconds=1)
     return {
         'result': {
-            'url': url,
+            'source': source,
             'content': truncated,
         },
         'measurement': {
             'fetch_time': fetch_time,
-            'fetch_size': len(response.content),
+            'fetch_size': len(raw),
             'compute_time': process_time,
             'markdown_length': original_length,
         }

@@ -2,5 +2,5 @@
   "timeout": 60,
   "memory": 256,
   "languages": ["python"],
-  "modules": []
+  "modules": ["storage"]
 }
