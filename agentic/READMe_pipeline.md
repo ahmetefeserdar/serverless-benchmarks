@@ -1,0 +1,1 @@
+We simulate an AI agent whose tools run as serverless functions. One tool produces a result (e.g. a fetched website), and the next tool consumes it. Functions can’t share memory, so the result goes through a mailbox (storage). We measure how much of the tool time is real work vs. moving data between functions.
