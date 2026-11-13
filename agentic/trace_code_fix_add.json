@@ -1,35 +1,45 @@
 {
   "version": "0.1",
-  "trace_id": "code-fix-add-001",
-  "task": "The tests in this repo fail. Find the bug and fix it.",
+  "trace_id": "code-exec-click-yes-001",
+  "task": "The tests of this repository fail. Find the bug and fix it.",
   "source": {"kind": "synthetic"},
+  "_proposed_fields": {
+    "session": "tool steps with the same session share one workspace; the function saves it to storage after a step and loads it on the next (could also be built on inputs_from)",
+    "expect": "what the tool returned during the recording; the replay compares against it to detect divergence"
+  },
   "steps": [
     {"id": 1, "type": "llm", "latency_s": 0.82, "input_tokens": 420, "output_tokens": 30},
 
     {"id": 2, "type": "tool", "tool": "code-exec", "session": "ws",
-     "args": {"repo": "calc-small", "op": "run_tests"},
-     "expect": {"exit_code": 1}},
+     "args": {"repo": "click-8.1.7", "op": "install_deps"},
+     "expect": {"exit_code": 0}},
+    {"id": 3, "type": "tool", "tool": "code-exec", "session": "ws",
+     "args": {"repo": "click-8.1.7", "op": "run_tests"},
+     "expect": {"exit_code": 1, "failed": 1}},
 
-    {"id": 3, "type": "llm", "latency_s": 0.64, "input_tokens": 980, "output_tokens": 25},
+    {"id": 4, "type": "llm", "latency_s": 0.64, "input_tokens": 1900, "output_tokens": 25},
 
-    {"id": 4, "type": "tool", "tool": "code-exec", "session": "ws", "group": 1,
-     "args": {"repo": "calc-small", "op": "grep", "pattern": "def add"},
-     "expect": {"files": ["calc.py"]}},
     {"id": 5, "type": "tool", "tool": "code-exec", "session": "ws", "group": 1,
-     "args": {"repo": "calc-small", "op": "read_file", "path": "calc.py"},
-     "expect": {"contains": "a - b"}},
+     "args": {"repo": "click-8.1.7", "op": "grep", "pattern": "class BoolParamType"},
+     "expect": {"contains_file": "src/click/types.py"}},
+    {"id": 6, "type": "tool", "tool": "code-exec", "session": "ws", "group": 1,
+     "args": {"repo": "click-8.1.7", "op": "read_file", "path": "src/click/types.py"},
+     "expect": {"contains": "{\"1\", \"true\", \"t\", \"y\", \"on\"}"}},
 
-    {"id": 6, "type": "llm", "latency_s": 0.91, "input_tokens": 1500, "output_tokens": 60},
-
-    {"id": 7, "type": "tool", "tool": "code-exec", "session": "ws",
-     "args": {"repo": "calc-small", "op": "apply_patch", "path": "calc.py",
-              "old": "return a - b", "new": "return a + b"},
-     "expect": {"applied": true}},
+    {"id": 7, "type": "llm", "latency_s": 0.91, "input_tokens": 4200, "output_tokens": 60},
 
     {"id": 8, "type": "tool", "tool": "code-exec", "session": "ws",
-     "args": {"repo": "calc-small", "op": "run_tests"},
-     "expect": {"exit_code": 0}},
+     "args": {"repo": "click-8.1.7", "op": "apply_patch", "path": "src/click/types.py",
+              "old": "{\"1\", \"true\", \"t\", \"y\", \"on\"}",
+              "new": "{\"1\", \"true\", \"t\", \"yes\", \"y\", \"on\"}"},
+     "expect": {"applied": true}},
+    {"id": 9, "type": "tool", "tool": "code-exec", "session": "ws",
+     "args": {"repo": "click-8.1.7", "op": "run_tests"},
+     "expect": {"exit_code": 0, "failed": 0, "passed": 589}},
+    {"id": 10, "type": "tool", "tool": "code-exec", "session": "ws",
+     "args": {"repo": "click-8.1.7", "op": "lint"},
+     "expect": {"issues": 0}},
 
-    {"id": 9, "type": "llm", "latency_s": 0.30, "input_tokens": 1700, "output_tokens": 15}
+    {"id": 11, "type": "llm", "latency_s": 0.30, "input_tokens": 4600, "output_tokens": 15}
   ]
 }
