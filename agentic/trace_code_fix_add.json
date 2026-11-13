@@ -1,0 +1,35 @@
+{
+  "version": "0.1",
+  "trace_id": "code-fix-add-001",
+  "task": "The tests in this repo fail. Find the bug and fix it.",
+  "source": {"kind": "synthetic"},
+  "steps": [
+    {"id": 1, "type": "llm", "latency_s": 0.82, "input_tokens": 420, "output_tokens": 30},
+
+    {"id": 2, "type": "tool", "tool": "code-exec", "session": "ws",
+     "args": {"repo": "calc-small", "op": "run_tests"},
+     "expect": {"exit_code": 1}},
+
+    {"id": 3, "type": "llm", "latency_s": 0.64, "input_tokens": 980, "output_tokens": 25},
+
+    {"id": 4, "type": "tool", "tool": "code-exec", "session": "ws", "group": 1,
+     "args": {"repo": "calc-small", "op": "grep", "pattern": "def add"},
+     "expect": {"files": ["calc.py"]}},
+    {"id": 5, "type": "tool", "tool": "code-exec", "session": "ws", "group": 1,
+     "args": {"repo": "calc-small", "op": "read_file", "path": "calc.py"},
+     "expect": {"contains": "a - b"}},
+
+    {"id": 6, "type": "llm", "latency_s": 0.91, "input_tokens": 1500, "output_tokens": 60},
+
+    {"id": 7, "type": "tool", "tool": "code-exec", "session": "ws",
+     "args": {"repo": "calc-small", "op": "apply_patch", "path": "calc.py",
+              "old": "return a - b", "new": "return a + b"},
+     "expect": {"applied": true}},
+
+    {"id": 8, "type": "tool", "tool": "code-exec", "session": "ws",
+     "args": {"repo": "calc-small", "op": "run_tests"},
+     "expect": {"exit_code": 0}},
+
+    {"id": 9, "type": "llm", "latency_s": 0.30, "input_tokens": 1700, "output_tokens": 15}
+  ]
+}
