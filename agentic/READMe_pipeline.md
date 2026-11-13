@@ -1,5 +1,61 @@
 We simulate an AI agent whose tools run as serverless functions. One tool produces a result (e.g. a fetched website), and the next tool consumes it. Functions can’t share memory, so the result goes through a mailbox (storage). We measure how much of the tool time is real work vs. moving data between functions.
 
+## Trace extension: `inputs_from`
+ 
+A tool step can list earlier step ids in `"inputs_from": [2, 3]`. The runner
+passes those steps' results to the function as `args["inputs"]`. This is the
+proposed answer to the open question in `agentic/TRACE_FORMAT.md` (to be
+agreed with the trace format owner).
+ 
+```json
+{"id": 4, "type": "tool", "tool": "pipeline", "inputs_from": [2],
+ "args": {"step": "consume"}}
+```
+ 
+The field is optional, so traces without it still work. It covers chains
+(2 → 4) and fan-in (2, 3, 4 → 6).
+ 
+### How it works
+ 
+1. **Remember results** (`agentic/pipeline.py`, `run`). After each tool step
+   the runner stores its result by step id:
+```python
+   results[row["id"]] = row["result"]
+```
+   In storage mode the result is only a small label, not the data:
+   `{"mode": "storage", "bucket": "...", "key": "produce.a1b2.txt", "size_bytes": 1048576, "sha256": "..."}`.
+ 
+2. **Look them up** (`agentic/pipeline.py`, `prepare_args`). Before calling a
+   step, the runner collects the listed results:
+```python
+   if "inputs_from" in step:
+       args["inputs"] = [results[i] for i in step["inputs_from"]]
+```
+ 
+3. **Use them** (`python/function.py`, `consume`). The function loops over
+   `inputs` and fetches each one according to how it was handed off:
+```python
+   if item["mode"] == "storage":
+       data = client.download_stream(item["bucket"], item["key"])
+   else:
+       data = item["data"].encode()
+```
+   It then checks the SHA-256 against the one `produce` reported, so a
+   corrupted or wrong object is detected.
+ 
+```
+step 2 produce ──► returns {"key": "produce.a1b2.txt", ...}
+                        │
+runner: results[2] = that
+                        │
+step 4 has inputs_from [2] → args["inputs"] = [results[2]]
+                        │
+step 4 consume ──► reads inputs[0]["key"] → downloads from storage
+```
+ 
+So only small labels travel through the runner; the data itself moves
+through storage (or inline, when the mode is `inline`).
+
 
 ## First result
  
