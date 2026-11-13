@@ -1,0 +1,15 @@
+{
+  "version": "0.1",
+  "trace_id": "pipeline-two-step-001",
+  "task": "Get one tool result and summarise it (2-step pipeline).",
+  "source": {"kind": "synthetic"},
+  "steps": [
+    {"id": 1, "type": "llm", "latency_s": 1.0, "note": "agent decides to call the tool"},
+    {"id": 2, "type": "tool", "tool": "pipeline",
+     "args": {"step": "produce", "size_bytes": 1048576, "mode": "storage", "seed": 1}},
+    {"id": 3, "type": "llm", "latency_s": 0.8, "note": "agent reads the result"},
+    {"id": 4, "type": "tool", "tool": "pipeline", "inputs_from": [2],
+     "args": {"step": "consume"}},
+    {"id": 5, "type": "llm", "latency_s": 1.5, "note": "agent writes the answer"}
+  ]
+}
