@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>OneStop Shop</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header>
+    <a class="logo" href="#/">OneStop Shop</a>
+    <form id="search-form" role="search" onsubmit="return false;">
+      <input id="search" type="search" placeholder="Search products" aria-label="Search products">
+      <select id="category" aria-label="Category"><option value="">All categories</option></select>
+      <select id="sort" aria-label="Sort by">
+        <option value="relevance">Relevance</option>
+        <option value="price-asc">Price: low to high</option>
+        <option value="price-desc">Price: high to low</option>
+        <option value="rating">Rating</option>
+      </select>
+      <button id="search-btn" type="submit">Search</button>
+    </form>
+    <a id="cart-link" href="#/cart">Cart (<span id="cart-count">0</span>)</a>
+  </header>
+  <main id="view" aria-live="polite">Loading catalog...</main>
+  <script src="app.js"></script>
+</body>
+</html>

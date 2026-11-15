@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>SeBS contact form</title>
+</head>
+<body>
+  <main>
+    <h1>Contact us</h1>
+    <form id="contact" onsubmit="return false;">
+      <label for="name">Your name</label>
+      <input id="name" name="name" type="text">
+      <button id="greet" type="submit">Send</button>
+    </form>
+    <p id="answer" role="status"></p>
+  </main>
+  <script>
+    document.getElementById('greet').addEventListener('click', function () {
+      var name = document.getElementById('name').value;
+      document.getElementById('answer').textContent = 'Hello, ' + name + '! We received your message.';
+    });
+  </script>
+</body>
+</html>
