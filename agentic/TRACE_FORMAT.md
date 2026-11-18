@@ -61,6 +61,7 @@ One JSON file per run, e.g. `traces/<tool-or-task>/<trace_id>.json`.
 | `tool` | yes | benchmark name without the number, e.g. `web-fetch` for `710.web-fetch` |
 | `args` | yes | input for the function's `handler(event)`; merged over the deployment's default input, so deployment-specific values (bucket names) never appear in traces |
 | `group` | no | consecutive tool steps with the same `group` run **in parallel** (agents often issue several tool calls at once) |
+| `error` | no | the call failed while recording (e.g. non-existent page); the error went back to the model, and replay skips the step |
 
 `id` is optional on every step and only helps referencing steps in results.
 

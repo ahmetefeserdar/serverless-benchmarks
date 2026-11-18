@@ -48,7 +48,9 @@ TOOLS = [
     },
 ]
 
-SYSTEM_PROMPT = "You are a research assistant. Use the tools to gather information, then answer concisely."
+SYSTEM_PROMPT = ("You are a research assistant. Never answer from memory: always read the relevant "
+                 "Wikipedia pages with the web-fetch tool first (URLs like https://en.wikipedia.org/wiki/Title), "
+                 "read further with start_index if a page is truncated and you need more, then answer concisely.")
 
 
 def post_json(url, payload, headers=None, timeout=120):
@@ -98,15 +100,20 @@ class MockLLM:
 
 
 def run_tool(tools, name, args):
+    # A failing tool returns an error to the model instead of stopping the run,
+    # as agent frameworks do (e.g. MCP's isError results).
     url, defaults = tools[name]
-    out = post_json(url, make_event(defaults, args))
-    return out["result"]["result"]
+    try:
+        out = post_json(url, make_event(defaults, args))
+        return out["result"]["result"]
+    except Exception as e:
+        return {"error": f"{type(e).__name__}: {e}"}
 
 
 def freeze_pages(steps):
     """Snapshot every page fetched live and point the trace at the snapshots."""
     for step in steps:
-        if step["type"] == "tool" and step["tool"] == "web-fetch" and "url" in step["args"]:
+        if step["type"] == "tool" and step["tool"] == "web-fetch" and "url" in step["args"] and not step.get("error"):
             args = dict(step["args"])
             args["page"] = snapshot.save(args.pop("url"))
             step["args"] = args
@@ -140,6 +147,9 @@ def record(task, endpoints_path, out_path, mock=False):
             results = list(pool.map(lambda c: run_tool(tools, c[1], c[2]), parsed))
         for (call_id, name, args), result in zip(parsed, results):
             step = {"id": len(steps) + 1, "type": "tool", "tool": name, "args": args}
+            if "error" in result:
+                step["error"] = result["error"]
+                print(f"  tool error (returned to model): {name} {args} -> {result['error']}")
             if len(parsed) > 1:
                 step["group"] = group
             steps.append(step)

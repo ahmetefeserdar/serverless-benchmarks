@@ -59,8 +59,18 @@ def replay_once(trace, tools, latency_scale, rep, verbose):
             i += 1
             continue
 
+        if step.get("error"):
+            # The recorded call failed (e.g. a non-existent page); it has no
+            # stored input, so it is skipped and only reported.
+            if verbose:
+                print(f"{step.get('id', i + 1):2}.  skip  TOOL {step['tool']:9} (failed while recording)")
+            rows.append({"rep": rep, "step": step.get("id", i + 1), "type": "tool-error", "wall_s": 0.0})
+            i += 1
+            continue
+
         batch = [step]
-        while "group" in step and i + len(batch) < len(steps) and steps[i + len(batch)].get("group") == step["group"]:
+        while ("group" in step and i + len(batch) < len(steps)
+               and steps[i + len(batch)].get("group") == step["group"] and not steps[i + len(batch)].get("error")):
             batch.append(steps[i + len(batch)])
 
         def run(s):

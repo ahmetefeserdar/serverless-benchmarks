@@ -1,0 +1,37 @@
+{
+  "version": "0.1",
+  "trace_id": "ollama-compare-001",
+  "task": "Compare serverless computing and cloud computing: what is the main difference for a developer?",
+  "source": {
+    "kind": "recorded",
+    "model": "qwen2.5:3b",
+    "agent": "minimal-loop",
+    "recorded_at": "2026-11-18"
+  },
+  "steps": [
+    {
+      "id": 1,
+      "type": "llm",
+      "latency_s": 10.745,
+      "input_tokens": 238,
+      "output_tokens": 47
+    },
+    {
+      "id": 2,
+      "type": "tool",
+      "tool": "web-fetch",
+      "args": {
+        "max_length": 200,
+        "start_index": 0,
+        "page": "Serverless_computing"
+      }
+    },
+    {
+      "id": 3,
+      "type": "llm",
+      "latency_s": 21.056,
+      "input_tokens": 541,
+      "output_tokens": 107
+    }
+  ]
+}
