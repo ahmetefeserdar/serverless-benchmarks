@@ -1,0 +1,19 @@
+{
+  "version": "0.1",
+  "trace_id": "pipeline-fan-in-001",
+  "task": "Get three tool results in parallel and combine them.",
+  "source": {"kind": "synthetic"},
+  "steps": [
+    {"id": 1, "type": "llm", "latency_s": 1.0, "note": "agent decides to call three tools at once"},
+    {"id": 2, "type": "tool", "tool": "pipeline", "group": 1,
+     "args": {"step": "produce", "size_bytes": 1048576, "mode": "storage", "seed": 1}},
+    {"id": 3, "type": "tool", "tool": "pipeline", "group": 1,
+     "args": {"step": "produce", "size_bytes": 1048576, "mode": "storage", "seed": 2}},
+    {"id": 4, "type": "tool", "tool": "pipeline", "group": 1,
+     "args": {"step": "produce", "size_bytes": 1048576, "mode": "storage", "seed": 3}},
+    {"id": 5, "type": "llm", "latency_s": 0.8, "note": "agent reads the results"},
+    {"id": 6, "type": "tool", "tool": "pipeline", "inputs_from": [2, 3, 4],
+     "args": {"step": "consume"}},
+    {"id": 7, "type": "llm", "latency_s": 1.5, "note": "agent writes the answer"}
+  ]
+}
