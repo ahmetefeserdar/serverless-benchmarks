@@ -1,0 +1,192 @@
+{
+  "version": "0.1",
+  "trace_id": "demo-all-tools-001",
+  "task": "Read about serverless, check the contact form, fix the failing tests in click, then hand the report to the next step.",
+  "source": {
+    "kind": "synthetic",
+    "note": "composed from the four team benchmarks for the progress demo"
+  },
+  "steps": [
+    {
+      "type": "llm",
+      "latency_s": 1.1,
+      "input_tokens": 350,
+      "output_tokens": 60,
+      "id": 1
+    },
+    {
+      "type": "tool",
+      "tool": "web-fetch",
+      "group": 1,
+      "args": {
+        "page": "Serverless_computing"
+      },
+      "id": 2
+    },
+    {
+      "type": "tool",
+      "tool": "browser",
+      "group": 1,
+      "args": {},
+      "id": 3
+    },
+    {
+      "type": "llm",
+      "latency_s": 0.9,
+      "input_tokens": 2600,
+      "output_tokens": 40,
+      "id": 4
+    },
+    {
+      "id": 5,
+      "type": "tool",
+      "tool": "code-exec",
+      "session": "ws",
+      "args": {
+        "repo": "click-8.1.7",
+        "op": "install_deps"
+      },
+      "expect": {
+        "exit_code": 0
+      }
+    },
+    {
+      "id": 6,
+      "type": "tool",
+      "tool": "code-exec",
+      "session": "ws",
+      "args": {
+        "repo": "click-8.1.7",
+        "op": "run_tests"
+      },
+      "expect": {
+        "exit_code": 1,
+        "failed": 1
+      }
+    },
+    {
+      "id": 7,
+      "type": "llm",
+      "latency_s": 0.64,
+      "input_tokens": 1900,
+      "output_tokens": 25
+    },
+    {
+      "id": 8,
+      "type": "tool",
+      "tool": "code-exec",
+      "session": "ws",
+      "group": 1,
+      "args": {
+        "repo": "click-8.1.7",
+        "op": "grep",
+        "pattern": "class BoolParamType"
+      },
+      "expect": {
+        "contains_file": "src/click/types.py"
+      }
+    },
+    {
+      "id": 9,
+      "type": "tool",
+      "tool": "code-exec",
+      "session": "ws",
+      "group": 1,
+      "args": {
+        "repo": "click-8.1.7",
+        "op": "read_file",
+        "path": "src/click/types.py"
+      },
+      "expect": {
+        "contains": "{\"1\", \"true\", \"t\", \"y\", \"on\"}"
+      }
+    },
+    {
+      "id": 10,
+      "type": "llm",
+      "latency_s": 0.91,
+      "input_tokens": 4200,
+      "output_tokens": 60
+    },
+    {
+      "id": 11,
+      "type": "tool",
+      "tool": "code-exec",
+      "session": "ws",
+      "args": {
+        "repo": "click-8.1.7",
+        "op": "apply_patch",
+        "path": "src/click/types.py",
+        "old": "{\"1\", \"true\", \"t\", \"y\", \"on\"}",
+        "new": "{\"1\", \"true\", \"t\", \"yes\", \"y\", \"on\"}"
+      },
+      "expect": {
+        "applied": true
+      }
+    },
+    {
+      "id": 12,
+      "type": "tool",
+      "tool": "code-exec",
+      "session": "ws",
+      "args": {
+        "repo": "click-8.1.7",
+        "op": "run_tests"
+      },
+      "expect": {
+        "exit_code": 0,
+        "failed": 0,
+        "passed": 589
+      }
+    },
+    {
+      "id": 13,
+      "type": "tool",
+      "tool": "code-exec",
+      "session": "ws",
+      "args": {
+        "repo": "click-8.1.7",
+        "op": "lint"
+      },
+      "expect": {
+        "issues": 0
+      }
+    },
+    {
+      "type": "llm",
+      "latency_s": 0.7,
+      "input_tokens": 5200,
+      "output_tokens": 30,
+      "id": 14
+    },
+    {
+      "type": "tool",
+      "tool": "pipeline",
+      "args": {
+        "step": "produce",
+        "size_bytes": 1048576,
+        "mode": "storage",
+        "seed": 1
+      },
+      "id": 15
+    },
+    {
+      "type": "tool",
+      "tool": "pipeline",
+      "inputs_from": [
+        15
+      ],
+      "args": {
+        "step": "consume"
+      },
+      "id": 16
+    },
+    {
+      "type": "llm",
+      "latency_s": 1.4,
+      "input_tokens": 5600,
+      "output_tokens": 300,
+      "id": 17
+    }
+  ]
+}

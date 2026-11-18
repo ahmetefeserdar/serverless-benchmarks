@@ -61,6 +61,9 @@ One JSON file per run, e.g. `traces/<tool-or-task>/<trace_id>.json`.
 | `tool` | yes | benchmark name without the number, e.g. `web-fetch` for `710.web-fetch` |
 | `args` | yes | input for the function's `handler(event)`; merged over the deployment's default input, so deployment-specific values (bucket names) never appear in traces |
 | `group` | no | consecutive tool steps with the same `group` run **in parallel** (agents often issue several tool calls at once) |
+| `inputs_from` | no | ids of earlier tool steps whose results are passed to this call as `args["inputs"]` (pipelines; proposed by Elif) |
+| `session` | no | tool steps with the same `session` share state; the replayer runs the whole session, including the LLM turns between its steps, in one invocation (proposed by Ahmet; used by `720.code-exec`, which selects its inner tool with `args.op`) |
+| `expect` | no | what the tool returned while recording; the function compares and reports divergence (proposed by Ahmet) |
 | `error` | no | the call failed while recording (e.g. non-existent page); the error went back to the model, and replay skips the step |
 
 `id` is optional on every step and only helps referencing steps in results.
@@ -72,7 +75,8 @@ One JSON file per run, e.g. `traces/<tool-or-task>/<trace_id>.json`.
 3. **Variable LLM delay is a replay option, not part of the trace.** The replayer can scale or jitter `latency_s` (e.g. to simulate a slower model) without editing traces.
 4. **Different runs of the same task are different traces.** Five recordings of one task that call tools differently are five files; that variation is wanted.
 
-## Open questions (to settle as a team)
+## Decided (v0.1, 2026-11-18)
 
-- Do tool steps need a recorded `expected` outcome for validation, or is the benchmark's own `validate_output` enough?
-- How do pipeline steps (function A's output feeding function B) reference earlier results?
+- Validation: optional per-step `expect` in addition to each benchmark's `validate_output`.
+- Pipelines: `inputs_from`; data moves through storage, only small references through the replayer.
+- State: `session`; one invocation per session for now. Saving and loading the workspace between separate invocations is the alternative to measure next.

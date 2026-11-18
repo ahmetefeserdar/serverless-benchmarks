@@ -1,14 +1,20 @@
 """Replay an agent trace against SeBS functions (see TRACE_FORMAT.md).
 
-llm steps  -> sleep for the recorded latency (stands in for the model)
-tool steps -> HTTP call to the deployed function, timed; consecutive tool
-              steps with the same group run in parallel
+llm steps     -> sleep for the recorded latency (stands in for the model)
+tool steps    -> HTTP call to the deployed function, timed; consecutive tool
+                 steps with the same group run in parallel
+inputs_from   -> results of the listed earlier steps are passed to the
+                 function as args["inputs"] (pipelines)
+session steps -> all steps of one session, including the LLM turns between
+                 them, run inside a single invocation, so the workspace
+                 survives between tool calls (stateful tools)
 
 The event sent to a function is the deployment's default input (bucket names
 etc., from `sebs local start` output) overridden by the step's args.
 
 Usage:
-  python3 replay.py <trace.json> <endpoints.json> [--repeat N] [--latency-scale X] [--out results.json]
+  python3 replay.py <trace.json> <endpoints.json> [<endpoints.json> ...]
+                    [--repeat N] [--latency-scale X] [--out results.json]
 """
 import argparse
 import concurrent.futures
@@ -17,19 +23,22 @@ import time
 import urllib.request
 
 
-def load_deployment(path):
-    # tool name -> (function URL, default input event), from `sebs local start` output
-    deployed = json.load(open(path))
+def load_deployment(paths):
+    # tool name -> (function URL, default input event), from `sebs local start` outputs
+    if isinstance(paths, str):
+        paths = [paths]
     tools = {}
-    for function, inputs in zip(deployed["functions"], deployed["inputs"]):
-        name = function["benchmark"].split(".", 1)[1]
-        tools[name] = ("http://" + function["url"], inputs)
+    for path in paths:
+        deployed = json.load(open(path))
+        for function, inputs in zip(deployed["functions"], deployed["inputs"]):
+            name = function["benchmark"].split(".", 1)[1]
+            tools[name] = ("http://" + function["url"], inputs)
     return tools
 
 
 def call(url, event):
     req = urllib.request.Request(url, data=json.dumps(event).encode(), headers={"Content-Type": "application/json"})
-    with urllib.request.urlopen(req, timeout=300) as resp:
+    with urllib.request.urlopen(req, timeout=600) as resp:
         return json.load(resp)
 
 
@@ -42,30 +51,108 @@ def make_event(defaults, args):
     return event
 
 
+def handler_seconds(measurement):
+    """Time spent in the handler, from the benchmark's own measurements.
+
+    The local SeBS server's begin/end only wrap the import of the function
+    (dockerfiles/local/python/server.py), so they cannot be used. Benchmarks
+    report microseconds as *_time or milliseconds as *_ms; replayed LLM
+    waits inside a session are not handler work. A benchmark that reports
+    phases together with their total (730.browser) is taken by its total.
+    """
+    if isinstance(measurement.get("total_time"), (int, float)):
+        return measurement["total_time"] / 1e6
+    total = 0.0
+    for key, value in measurement.items():
+        if not isinstance(value, (int, float)) or key.startswith("llm_wait"):
+            continue
+        if key.endswith("_time"):
+            total += value / 1e6
+        elif key.endswith("_ms"):
+            total += value / 1e3
+    # Per-tool totals of a session (720.code-exec)
+    for tool in (measurement.get("tools") or {}).values():
+        total += tool.get("wall_ms", 0) / 1e3
+    return total
+
+
+def session_span(steps, i):
+    """Indices of all steps belonging to the session that starts at step i."""
+    session = steps[i]["session"]
+    last = max(j for j, s in enumerate(steps) if s.get("session") == session)
+    return list(range(i, last + 1))
+
+
+def session_event(defaults, span_steps, latency_scale):
+    # Translate trace steps into the in-function trace of a session-based tool
+    # (720.code-exec): "op" selects the tool inside the function.
+    inner = []
+    for s in span_steps:
+        if s["type"] == "llm":
+            inner.append({"type": "llm", "latency_s": s["latency_s"]})
+        else:
+            args = {k: v for k, v in s["args"].items() if k not in ("op", "repo")}
+            inner.append({"type": "tool", "tool": s["args"]["op"], "args": args, "expect": s.get("expect", {})})
+    event = dict(defaults)
+    event.update({"trace": inner, "llm_scale": latency_scale})
+    return event
+
+
+def tool_row(rep, step, out, wall, group_size):
+    m = out["result"].get("measurement", {})
+    return {"rep": rep, "step": step.get("id"), "type": "tool", "tool": step["tool"],
+            "group": step.get("group") if group_size > 1 else None, "wall_s": wall,
+            "is_cold": out.get("is_cold"), "import_s": float(out["end"]) - float(out["begin"]),
+            "function_s": handler_seconds(m),
+            "measurement": {k: v for k, v in m.items() if isinstance(v, (int, float))}}
+
+
 def replay_once(trace, tools, latency_scale, rep, verbose):
     rows = []
+    results = {}
     steps = trace["steps"]
+    log = print if verbose else (lambda *a, **k: None)
     start = time.perf_counter()
     i = 0
     while i < len(steps):
         step = steps[i]
+        sid = step.get("id", i + 1)
         t0 = time.perf_counter()
+
         if step["type"] == "llm":
             time.sleep(step["latency_s"] * latency_scale)
             dt = time.perf_counter() - t0
-            rows.append({"rep": rep, "step": step.get("id", i + 1), "type": "llm", "wall_s": dt})
-            if verbose:
-                print(f"{step.get('id', i + 1):2}. {dt:5.2f}s  LLM  think")
+            rows.append({"rep": rep, "step": sid, "type": "llm", "wall_s": dt})
+            log(f"{sid:2}. {dt:6.2f}s  LLM  think")
             i += 1
             continue
 
         if step.get("error"):
             # The recorded call failed (e.g. a non-existent page); it has no
             # stored input, so it is skipped and only reported.
-            if verbose:
-                print(f"{step.get('id', i + 1):2}.  skip  TOOL {step['tool']:9} (failed while recording)")
-            rows.append({"rep": rep, "step": step.get("id", i + 1), "type": "tool-error", "wall_s": 0.0})
+            rows.append({"rep": rep, "step": sid, "type": "tool-error", "wall_s": 0.0})
+            log(f"{sid:2}.   skip  TOOL {step['tool']:11} (failed while recording)")
             i += 1
+            continue
+
+        if "session" in step:
+            span = session_span(steps, i)
+            span_steps = [steps[j] for j in span]
+            url, defaults = tools[step["tool"]]
+            out = call(url, session_event(defaults, span_steps, latency_scale))
+            dt = time.perf_counter() - t0
+            row = tool_row(rep, step, out, dt, 1)
+            inner = out["result"]["result"].get("steps", [])
+            row.update({"type": "session", "session": step["session"], "steps": [steps[j].get("id") for j in span],
+                        "llm_wait_s": out["result"]["measurement"].get("llm_wait_ms", 0) / 1e3,
+                        "diverged": [s.get("tool") for s in inner if s.get("type") == "tool"
+                                     and s.get("matches_recording") is False]})
+            rows.append(row)
+            n_tools = sum(s["type"] == "tool" for s in span_steps)
+            log(f"{sid:2}. {dt:6.2f}s  SESSION {step['tool']:8} '{step['session']}': {n_tools} tool calls + "
+                f"{len(span_steps) - n_tools} LLM waits in ONE invocation, cold={out.get('is_cold')}, "
+                f"llm-wait inside function={row['llm_wait_s']:.2f}s, diverged={row['diverged'] or 'none'}")
+            i = span[-1] + 1
             continue
 
         batch = [step]
@@ -75,25 +162,22 @@ def replay_once(trace, tools, latency_scale, rep, verbose):
 
         def run(s):
             url, defaults = tools[s["tool"]]
-            return call(url, make_event(defaults, s["args"]))
+            args = dict(s["args"])
+            if "inputs_from" in s:
+                args["inputs"] = [results[j] for j in s["inputs_from"]]
+            return call(url, make_event(defaults, args))
 
         with concurrent.futures.ThreadPoolExecutor() as pool:
             outs = list(pool.map(run, batch))
         dt = time.perf_counter() - t0
         for k, (s, out) in enumerate(zip(batch, outs)):
-            m = out["result"].get("measurement", {})
-            # The local SeBS server's begin/end only wrap the import of the function
-            # (dockerfiles/local/python/server.py), so it is reported as import time;
-            # handler time comes from the benchmark's own measurements.
-            import_s = float(out["end"]) - float(out["begin"])
-            function_s = sum(v for key, v in m.items() if key.endswith("_time")) / 1e6
-            rows.append({"rep": rep, "step": s.get("id", i + k + 1), "type": "tool", "tool": s["tool"],
-                         "group": s.get("group"), "wall_s": dt, "is_cold": out.get("is_cold"),
-                         "import_s": import_s, "function_s": function_s, **m})
-            if verbose:
-                par = f" [parallel group {s['group']}]" if len(batch) > 1 else ""
-                print(f"{s.get('id', i + k + 1):2}. {dt:5.2f}s  TOOL {s['tool']:9} cold={str(out.get('is_cold')):5} "
-                      f"function={function_s:.2f}s import={import_s:.2f}s{par}")
+            results[s.get("id", i + k + 1)] = out["result"]["result"]
+            row = tool_row(rep, s, out, dt, len(batch))
+            rows.append(row)
+            par = f" [parallel group {s['group']}]" if len(batch) > 1 else ""
+            fed = f" [inputs from {s['inputs_from']}]" if "inputs_from" in s else ""
+            log(f"{s.get('id', i + k + 1):2}. {dt:6.2f}s  TOOL {s['tool']:11} cold={str(out.get('is_cold')):5} "
+                f"function={row['function_s']:.2f}s{par}{fed}")
         i += len(batch)
 
     total = time.perf_counter() - start
@@ -106,7 +190,7 @@ def replay_once(trace, tools, latency_scale, rep, verbose):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("trace")
-    parser.add_argument("endpoints")
+    parser.add_argument("endpoints", nargs="+")
     parser.add_argument("--repeat", type=int, default=1)
     parser.add_argument("--latency-scale", type=float, default=1.0)
     parser.add_argument("--out")
