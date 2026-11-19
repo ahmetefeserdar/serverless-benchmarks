@@ -1,0 +1,54 @@
+{
+  "version": "0.1",
+  "trace_id": "batch-usa-005",
+  "task": "What is the capital and the population of the United States?",
+  "source": {
+    "kind": "recorded",
+    "model": "qwen2.5:3b",
+    "agent": "minimal-loop",
+    "recorded_at": "2026-11-18"
+  },
+  "steps": [
+    {
+      "id": 1,
+      "type": "llm",
+      "latency_s": 5.001,
+      "input_tokens": 233,
+      "output_tokens": 50
+    },
+    {
+      "id": 2,
+      "type": "tool",
+      "tool": "web-fetch",
+      "args": {
+        "max_length": 300,
+        "start_index": 0,
+        "page": "Geography_of_the_United_States"
+      }
+    },
+    {
+      "id": 3,
+      "type": "llm",
+      "latency_s": 25.45,
+      "input_tokens": 718,
+      "output_tokens": 85
+    },
+    {
+      "id": 4,
+      "type": "tool",
+      "tool": "web-fetch",
+      "args": {
+        "max_length": 300,
+        "start_index": 300,
+        "page": "Geography_of_the_United_States"
+      }
+    },
+    {
+      "id": 5,
+      "type": "llm",
+      "latency_s": 24.813,
+      "input_tokens": 1238,
+      "output_tokens": 60
+    }
+  ]
+}

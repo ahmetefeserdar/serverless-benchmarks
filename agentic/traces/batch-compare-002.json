@@ -1,0 +1,49 @@
+{
+  "version": "0.1",
+  "trace_id": "batch-compare-002",
+  "task": "Compare serverless computing and cloud computing: what is the main difference for a developer?",
+  "source": {
+    "kind": "recorded",
+    "model": "qwen2.5:3b",
+    "agent": "minimal-loop",
+    "recorded_at": "2026-11-18"
+  },
+  "steps": [
+    {
+      "id": 1,
+      "type": "llm",
+      "latency_s": 8.341,
+      "input_tokens": 238,
+      "output_tokens": 93
+    },
+    {
+      "id": 2,
+      "type": "tool",
+      "tool": "web-fetch",
+      "args": {
+        "max_length": 200,
+        "start_index": 0,
+        "page": "Cloud_computing"
+      },
+      "group": 1
+    },
+    {
+      "id": 3,
+      "type": "tool",
+      "tool": "web-fetch",
+      "args": {
+        "max_length": 200,
+        "start_index": 0,
+        "page": "Serverless_computing"
+      },
+      "group": 1
+    },
+    {
+      "id": 4,
+      "type": "llm",
+      "latency_s": 40.774,
+      "input_tokens": 945,
+      "output_tokens": 175
+    }
+  ]
+}

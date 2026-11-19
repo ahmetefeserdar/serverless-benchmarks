@@ -1,0 +1,37 @@
+{
+  "version": "0.1",
+  "trace_id": "batch-history-005",
+  "task": "Summarize the history of cloud computing in a few sentences.",
+  "source": {
+    "kind": "recorded",
+    "model": "qwen2.5:3b",
+    "agent": "minimal-loop",
+    "recorded_at": "2026-11-18"
+  },
+  "steps": [
+    {
+      "id": 1,
+      "type": "llm",
+      "latency_s": 4.276,
+      "input_tokens": 234,
+      "output_tokens": 49
+    },
+    {
+      "id": 2,
+      "type": "tool",
+      "tool": "web-fetch",
+      "args": {
+        "max_length": 2000,
+        "start_index": 0,
+        "page": "History_of_cloud_computing"
+      }
+    },
+    {
+      "id": 3,
+      "type": "llm",
+      "latency_s": 31.305,
+      "input_tokens": 883,
+      "output_tokens": 101
+    }
+  ]
+}

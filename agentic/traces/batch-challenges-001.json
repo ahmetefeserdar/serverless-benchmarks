@@ -1,0 +1,37 @@
+{
+  "version": "0.1",
+  "trace_id": "batch-challenges-001",
+  "task": "What are the main challenges and drawbacks of serverless computing? Read the whole relevant section.",
+  "source": {
+    "kind": "recorded",
+    "model": "qwen2.5:3b",
+    "agent": "minimal-loop",
+    "recorded_at": "2026-11-18"
+  },
+  "steps": [
+    {
+      "id": 1,
+      "type": "llm",
+      "latency_s": 5.767,
+      "input_tokens": 239,
+      "output_tokens": 54
+    },
+    {
+      "id": 2,
+      "type": "tool",
+      "tool": "web-fetch",
+      "args": {
+        "max_length": 2048,
+        "start_index": 0,
+        "page": "Serverless_computing"
+      }
+    },
+    {
+      "id": 3,
+      "type": "llm",
+      "latency_s": 41.828,
+      "input_tokens": 994,
+      "output_tokens": 123
+    }
+  ]
+}

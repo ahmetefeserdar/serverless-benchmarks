@@ -1,0 +1,190 @@
+\documentclass[aspectratio=169,11pt]{beamer}
+\usetheme{default}
+\usecolortheme{default}
+\setbeamertemplate{navigation symbols}{}
+\setbeamertemplate{footline}[frame number]
+\usepackage[T1]{fontenc}
+\usepackage{booktabs}
+
+\title{Agentic Workloads for SeBS}
+\subtitle{Progress update}
+\author{Elif \"Ozsoy \and Ahmet Efe Serdar \and Jan Staszewicz \and Ivan Bozhanin}
+\institute{DPHPC HS26 \quad Mentor: Marcin Copik}
+\date{19 November 2026}
+
+\begin{document}
+
+\begin{frame}
+  \titlepage
+\end{frame}
+
+% ---------------------------------------------------------------------------
+\begin{frame}{Goal}
+  \begin{itemize}
+    \item AI agents do not only generate text: they \textbf{call tools} (browse, run code, fetch pages).
+    \item Tool calls are short, bursty and independent: a natural fit for \textbf{serverless functions}.
+    \item Question: \emph{how do agent workloads behave on serverless platforms?}
+    \item SeBS has 15 benchmarks, \textbf{none of them agentic}.
+  \end{itemize}
+  \vspace{1em}
+  Deliverable: a collection of agentic benchmarks for SeBS (single functions and pipelines),
+  reproducible, runnable on any platform, without live LLM inference.
+\end{frame}
+
+% ---------------------------------------------------------------------------
+\begin{frame}[fragile]{Method: record and replay}
+\footnotesize
+\begin{verbatim}
+RECORD (once)    agent loop -> LLM decides -> tool runs for real
+                 log every LLM turn and tool call       -> trace.json
+
+REPLAY (always)  trace.json -> wait LLM time / call real tool
+                 no LLM, identical every run            -> results.json
+\end{verbatim}
+\normalsize
+  \begin{itemize}
+    \item One trace format and one replayer shared by all benchmarks.
+    \item Inputs are stored snapshots (pages, repositories, sites), never the live web.
+    \item Replaying the same trace: \textbf{2.00\,s $\pm$ 0.03\,s} with snapshots;
+          one run against live Wikipedia took 25\,s.
+  \end{itemize}
+\end{frame}
+
+% ---------------------------------------------------------------------------
+\begin{frame}[fragile]{Trace format (v0.1)}
+\begin{verbatim}
+{"task": "Compare serverless and cloud computing",
+ "steps": [
+   {"type": "llm",  "latency_s": 1.2, "input_tokens": 850},
+   {"type": "tool", "tool": "web-fetch", "group": 1, "args": {"page": "..."}},
+   {"type": "tool", "tool": "browser",   "group": 1, "args": {...}},
+   {"type": "tool", "tool": "code-exec", "session": "ws", "expect": {...}},
+   {"type": "tool", "tool": "pipeline",  "inputs_from": [5]}, ...]}
+\end{verbatim}
+  \begin{itemize}
+    \item \texttt{group}: parallel tool calls in one LLM turn
+    \item \texttt{session}: stateful tools share a workspace
+    \item \texttt{inputs\_from}: output of one function feeds the next (via storage)
+    \item \texttt{expect}: detects divergence from the recording
+  \end{itemize}
+\end{frame}
+
+% ---------------------------------------------------------------------------
+\begin{frame}{Four benchmarks (\texttt{700.agentic})}
+  \small
+  \begin{tabular}{@{}llp{7.6cm}@{}}
+    \toprule
+    Benchmark & Owner & What the agent does \\
+    \midrule
+    \texttt{710.web-fetch} & Ivan  & MCP fetch server: page $\to$ main content $\to$ Markdown $\to$ truncate \\
+    \texttt{720.code-exec} & Ahmet & pinned repository: install, run tests, grep, patch, lint \\
+    \texttt{730.browser}   & Jan   & headless Chromium on stored sites: form, Wikipedia, 2\,000-item shop \\
+    \texttt{740.pipeline}  & Elif  & multi-step task, results handed off between functions via storage \\
+    \bottomrule
+  \end{tabular}
+  \vspace{1em}
+  \begin{itemize}
+    \item Each: test/small/large inputs, output validation, own timing breakdown.
+    \item All four replayed by the same runner in one agent task (see demo).
+  \end{itemize}
+\end{frame}
+
+% ---------------------------------------------------------------------------
+\begin{frame}{First results per benchmark (local, SeBS local backend)}
+  \begin{itemize}
+    \item \textbf{web-fetch:} CPU-bound, not I/O-bound. 3\,MB page: 2.4\,s parsing vs.\ 10\,ms fetch;
+          the model receives 5\,000 of 260\,000 produced characters.
+    \item \textbf{browser:} $\approx$475\,MB package, about $2\times$ the AWS Lambda zip limit (250\,MB);
+          8 processes, 350--450\,MB memory; in a warm run half the time is closing Chromium.
+    \item \textbf{code-exec:} a bug-fix session on \texttt{click} (7 tool calls) fails, then passes,
+          exactly as recorded. Its state must survive between calls (next slide).
+    \item \textbf{pipeline:} for a 1\,MB result, hand-off plus invocation overhead exceeds the actual work.
+  \end{itemize}
+\end{frame}
+
+% ---------------------------------------------------------------------------
+\begin{frame}{Stateful tools: keep the function alive, or save and load?}
+  Bug-fix session on \texttt{click} (7 tool calls, 3 LLM turns between them):
+  \vspace{0.5em}
+  \begin{center}
+  \begin{tabular}{@{}lrrr@{}}
+    \toprule
+    Mode & Invocations & Billed time & End-to-end \\
+    \midrule
+    whole session in one call (waits for the LLM) & 1 & 5.06\,s & 6.22\,s \\
+    one call per step, workspace via storage       & 7 & 3.91\,s & 6.67\,s \\
+    \bottomrule
+  \end{tabular}
+  \end{center}
+  \begin{itemize}
+    \item One call: \textbf{about a third of the billed time is idle waiting} for the model.
+    \item Per step: \textbf{23\% cheaper, 7\% slower}, since every step saves and loads the workspace.
+    \item Ahmet's measurement on fresh containers for every step: 11.7\,s,
+          so per-step only pays off while containers stay warm.
+  \end{itemize}
+  \footnotesize Medians of 3 runs, local; per-step mode by Ahmet, replayed by the shared runner.
+\end{frame}
+
+% ---------------------------------------------------------------------------
+\begin{frame}{Real traces with a local model}
+  \begin{itemize}
+    \item Recorder runs a tool-calling agent against any OpenAI-compatible API.
+    \item Without API credits so far: \texttt{qwen2.5:3b} via Ollama on a laptop CPU.
+    \item 28 traces (5 tasks $\times$ 5 runs, one failed, + 4 earlier):
+      \begin{itemize}
+        \item same task, different behaviour: one task always fetched 2 pages \textbf{in parallel},
+              others mostly 1 page;
+        \item page re-reads with \texttt{start\_index}, tool errors returned to the model.
+      \end{itemize}
+    \item Caveat: CPU inference makes LLM time $>96\%$ of every trace.
+          Realistic latencies need a hosted model (Muse credits) or latency scaling.
+  \end{itemize}
+\end{frame}
+
+% ---------------------------------------------------------------------------
+\begin{frame}[fragile]{Demo: one agent task across all four benchmarks}
+\begin{verbatim}
+think 1.1s -> web-fetch || browser (parallel)            0.77 s
+think 0.9s -> code-exec SESSION, 7 tool calls            3.76 s
+                (2.20 s work + 1.55 s LLM wait inside the function)
+think 0.7s -> pipeline produce -> consume (inputs_from)  0.06 s
+think 1.4s -> answer
+total 8.7 s over 3 runs, tools 53 %
+\end{verbatim}
+  \begin{itemize}
+    \item LLM latencies here are synthetic ($\sim$1\,s per turn, typical for hosted APIs).
+  \end{itemize}
+\end{frame}
+
+% ---------------------------------------------------------------------------
+\begin{frame}{What agents do to serverless}
+  \begin{itemize}
+    \item \textbf{Agents are stateful, functions are not.} Workspace or browser tab is lost
+          between calls: keep one invocation alive (idle billing) or save/load per step (cheaper, slower).
+    \item \textbf{Parallel tool calls.} Locally they queue on one container;
+          on a cloud platform they start new containers (cold starts).
+    \item \textbf{Heavy tools.} Browser exceeds package limits; start-up dominates short actions.
+    \item \textbf{Data hand-off} between tool functions can cost more than the work.
+    \item Side finding: the SeBS local server's \texttt{begin}/\texttt{end} only time the
+          function import, not the handler.
+  \end{itemize}
+\end{frame}
+
+% ---------------------------------------------------------------------------
+\begin{frame}{Next steps and questions}
+  \textbf{Next}
+  \begin{itemize}
+    \item Cloud runs on AWS/GCP free tier; replay through SeBS triggers.
+    \item Session modes on a real cloud: cold starts per step, storage latency.
+    \item More traces; justify tool selection with AgentSysBench and tool-usage studies.
+    \item One PR per benchmark.
+  \end{itemize}
+  \textbf{Questions}
+  \begin{itemize}
+    \item Muse credits for realistic traces?
+    \item Should the replayer become a SeBS experiment?
+    \item Snapshots: into the benchmarks-data repository?
+  \end{itemize}
+\end{frame}
+
+\end{document}

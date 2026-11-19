@@ -1,0 +1,56 @@
+{
+  "version": "0.1",
+  "trace_id": "batch-faas-003",
+  "task": "What is Function as a service, and which companies offer it?",
+  "source": {
+    "kind": "recorded",
+    "model": "qwen2.5:3b",
+    "agent": "minimal-loop",
+    "recorded_at": "2026-11-18"
+  },
+  "steps": [
+    {
+      "id": 1,
+      "type": "llm",
+      "latency_s": 3.963,
+      "input_tokens": 234,
+      "output_tokens": 45
+    },
+    {
+      "id": 2,
+      "type": "tool",
+      "tool": "web-fetch",
+      "args": {
+        "max_length": 200,
+        "start_index": null,
+        "url": "https://en.wikipedia.org/wiki/Function_as_a_service"
+      },
+      "error": "HTTPError: HTTP Error 500: Internal Server Error"
+    },
+    {
+      "id": 3,
+      "type": "llm",
+      "latency_s": 9.305,
+      "input_tokens": 310,
+      "output_tokens": 81
+    },
+    {
+      "id": 4,
+      "type": "tool",
+      "tool": "web-fetch",
+      "args": {
+        "max_length": 200,
+        "start_index": null,
+        "url": "https://en.wikipedia.org/wiki/Function_as_a_service"
+      },
+      "error": "HTTPError: HTTP Error 500: Internal Server Error"
+    },
+    {
+      "id": 5,
+      "type": "llm",
+      "latency_s": 5.182,
+      "input_tokens": 386,
+      "output_tokens": 44
+    }
+  ]
+}
