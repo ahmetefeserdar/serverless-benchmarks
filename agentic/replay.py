@@ -83,16 +83,17 @@ def session_span(steps, i):
     return list(range(i, last + 1))
 
 
+def inner_step(s):
+    if s["type"] == "llm":
+        return {"type": "llm", "latency_s": s["latency_s"]}
+    args = {k: v for k, v in s["args"].items() if k not in ("op", "repo")}
+    return {"type": "tool", "tool": s["args"]["op"], "args": args, "expect": s.get("expect", {})}
+
+
 def session_event(defaults, span_steps, latency_scale):
     # Translate trace steps into the in-function trace of a session-based tool
     # (720.code-exec): "op" selects the tool inside the function.
-    inner = []
-    for s in span_steps:
-        if s["type"] == "llm":
-            inner.append({"type": "llm", "latency_s": s["latency_s"]})
-        else:
-            args = {k: v for k, v in s["args"].items() if k not in ("op", "repo")}
-            inner.append({"type": "tool", "tool": s["args"]["op"], "args": args, "expect": s.get("expect", {})})
+    inner = [inner_step(s) for s in span_steps]
     event = dict(defaults)
     event.update({"trace": inner, "llm_scale": latency_scale})
     return event
@@ -107,7 +108,38 @@ def tool_row(rep, step, out, wall, group_size):
             "measurement": {k: v for k, v in m.items() if isinstance(v, (int, float))}}
 
 
-def replay_once(trace, tools, latency_scale, rep, verbose):
+def replay_session_per_step(rows, rep, span_steps, tools, latency_scale, log):
+    """One invocation per tool step; the function saves its workspace to storage
+    and the next step loads it (720.code-exec per-step mode). LLM waits happen
+    here, on the client, so the function is not billed while the model thinks."""
+    first = next(s for s in span_steps if s["type"] == "tool")
+    url, defaults = tools[first["tool"]]
+    key = None
+    for s in span_steps:
+        sid = s.get("id")
+        t0 = time.perf_counter()
+        if s["type"] == "llm":
+            time.sleep(s["latency_s"] * latency_scale)
+            dt = time.perf_counter() - t0
+            rows.append({"rep": rep, "step": sid, "type": "llm", "wall_s": dt})
+            log(f"{sid:2}. {dt:6.2f}s  LLM  think")
+            continue
+        event = dict(defaults)
+        event.update({"trace": [inner_step(s)], "llm_scale": 0.0,
+                      "session": {"id": first["session"], "load": key, "save": "changed"}})
+        out = call(url, event)
+        dt = time.perf_counter() - t0
+        key = out["result"]["result"].get("session", {}).get("key", key)
+        row = tool_row(rep, s, out, dt, 1)
+        inner = out["result"]["result"].get("steps", [])
+        row.update({"type": "tool", "session": first["session"],
+                    "diverged": any(x.get("matches_recording") is False for x in inner if x.get("type") == "tool")})
+        rows.append(row)
+        log(f"{sid:2}. {dt:6.2f}s  TOOL {s['tool']:11} op={s['args']['op']:12} cold={str(out.get('is_cold')):5} "
+            f"function={row['function_s']:.2f}s diverged={row['diverged']}")
+
+
+def replay_once(trace, tools, latency_scale, rep, verbose, session_mode="one-call"):
     rows = []
     results = {}
     steps = trace["steps"]
@@ -133,6 +165,12 @@ def replay_once(trace, tools, latency_scale, rep, verbose):
             rows.append({"rep": rep, "step": sid, "type": "tool-error", "wall_s": 0.0})
             log(f"{sid:2}.   skip  TOOL {step['tool']:11} (failed while recording)")
             i += 1
+            continue
+
+        if "session" in step and session_mode == "per-step":
+            span = session_span(steps, i)
+            replay_session_per_step(rows, rep, [steps[j] for j in span], tools, latency_scale, log)
+            i = span[-1] + 1
             continue
 
         if "session" in step:
@@ -193,6 +231,9 @@ def main():
     parser.add_argument("endpoints", nargs="+")
     parser.add_argument("--repeat", type=int, default=1)
     parser.add_argument("--latency-scale", type=float, default=1.0)
+    parser.add_argument("--session-mode", choices=["one-call", "per-step"], default="one-call",
+                        help="one-call: a whole session in one invocation; per-step: one invocation per "
+                             "tool step with workspace save/load through storage")
     parser.add_argument("--out")
     args = parser.parse_args()
 
@@ -201,11 +242,13 @@ def main():
     print(f"task: {trace['task']}\n")
     steps, runs = [], []
     for rep in range(args.repeat):
-        rows, summary = replay_once(trace, tools, args.latency_scale, rep, verbose=(rep == 0))
+        rows, summary = replay_once(trace, tools, args.latency_scale, rep, verbose=(rep == 0),
+                                    session_mode=args.session_mode)
         steps += rows
         runs.append(summary)
     if args.out:
         json.dump({"trace_id": trace["trace_id"], "latency_scale": args.latency_scale,
+                   "session_mode": args.session_mode,
                    "runs": runs, "steps": steps}, open(args.out, "w"), indent=2)
         print(f"\nwrote {args.out}")
 
